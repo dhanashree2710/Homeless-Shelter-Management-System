@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — User Management</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="hsms-app">
+  <aside class="hsms-sidebar" id="hsms-sidebar"></aside>
+  <div class="hsms-main">
+    <header class="hsms-topbar" id="hsms-topbar"></header>
+    <main class="hsms-content">
+
+      <div class="card-header">
+        <h2 style="margin:0;">User Management</h2>
+        <button class="btn btn-orange" id="newUserBtn">+ Add User</button>
+      </div>
+
+      <div class="card" id="userFormCard" style="display:none;">
+        <h3 id="userFormTitle">Add User</h3>
+        <form id="userForm">
+          <input type="hidden" id="u_id" />
+          <div class="grid-2">
+            <div class="field"><label>Full Name</label><input type="text" id="u_name" required /></div>
+            <div class="field"><label>Email</label><input type="email" id="u_email" required /></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Password</label><input type="text" id="u_password" placeholder="Set or update password" /></div>
+            <div class="field"><label>Phone</label><input type="text" id="u_phone" /></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Role</label>
+              <select id="u_role">
+                <option value="field_worker">Field Worker</option>
+                <option value="shelter_admin">Shelter Admin</option>
+                <option value="super_admin">Super Admin</option>
+              </select>
+            </div>
+            <div class="field"><label>Assigned Shelter</label><select id="u_shelter"><option value="">— None —</option></select></div>
+          </div>
+          <div class="field">
+            <label><input type="checkbox" id="u_active" checked style="width:auto; margin-right:6px;" />Account Active</label>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button type="submit" class="btn btn-navy">Save User</button>
+            <button type="button" class="btn btn-outline" id="cancelUserBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Shelter</th><th>Active</th><th></th></tr></thead>
+            <tbody id="userBody"><tr><td colspan="6">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/user.js"></script>
+</body>
+</html>

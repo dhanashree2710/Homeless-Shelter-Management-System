@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — New Registration</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="hsms-app">
+  <aside class="hsms-sidebar" id="hsms-sidebar"></aside>
+  <div class="hsms-main">
+    <header class="hsms-topbar" id="hsms-topbar"></header>
+    <main class="hsms-content">
+
+      <h2>New Person Registration</h2>
+      <p style="color:var(--text-muted); margin-top:-8px;">Complete each module to register a newly found individual.</p>
+
+      <div class="steps" id="stepPills">
+        <div class="step-pill active" data-step="1">A. Discovery</div>
+        <div class="step-pill" data-step="2">B. Personal</div>
+        <div class="step-pill" data-step="3">C. Aadhaar</div>
+        <div class="step-pill" data-step="4">D. Relatives</div>
+        <div class="step-pill" data-step="5">E. Photos</div>
+      </div>
+
+      <form id="regForm" class="card">
+
+        <!-- MODULE A: Discovery -->
+        <section class="form-section active" data-section="1">
+          <h3>Module A — Discovery Information</h3>
+          <div class="grid-2">
+            <div class="field">
+              <label>GPS Coordinates (auto-capture)</label>
+              <div style="display:flex; gap:8px;">
+                <input type="text" id="found_lat" placeholder="Latitude" readonly />
+                <input type="text" id="found_lng" placeholder="Longitude" readonly />
+              </div>
+              <small class="hint"><button type="button" class="btn btn-outline btn-sm" id="gpsBtn" style="margin-top:6px;">📍 Capture GPS</button></small>
+            </div>
+            <div class="field">
+              <label for="found_area">Area / Zone</label>
+              <input type="text" id="found_area" placeholder="e.g. Near Railway Station" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="found_address">Address (Street, Landmark, City, State, PIN)</label>
+            <textarea id="found_address" rows="2" required placeholder="Full found address"></textarea>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="city_code">City Code (for Tracking ID, e.g. MUM, PUN)</label>
+              <input type="text" id="city_code" maxlength="3" placeholder="PUN" required />
+            </div>
+            <div class="field">
+              <label for="referred_shelter">Referred To Shelter</label>
+              <select id="referred_shelter"><option value="">— Not yet assigned —</option></select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="case_notes">Case Notes (initial observations)</label>
+            <textarea id="case_notes" rows="3" placeholder="Condition when found, behavior, etc."></textarea>
+          </div>
+          <div style="text-align:right;"><button type="button" class="btn btn-navy" onclick="hsmsGoStep(2)">Next →</button></div>
+        </section>
+
+        <!-- MODULE B: Personal -->
+        <section class="form-section" data-section="2">
+          <h3>Module B — Personal Information</h3>
+          <div class="grid-2">
+            <div class="field"><label for="first_name">First Name</label><input type="text" id="first_name" placeholder="Unknown if unresponsive" /></div>
+            <div class="field"><label for="last_name">Last Name</label><input type="text" id="last_name" /></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label for="alias">Known Alias / Nickname</label><input type="text" id="alias" /></div>
+            <div class="field"><label for="age_est">Approximate Age</label><input type="number" id="age_est" min="0" max="120" /></div>
+          </div>
+          <div class="field">
+            <label for="gender">Gender</label>
+            <select id="gender">
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+              <option value="unknown" selected>Prefer not to say / Unknown</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="physical_description">Physical Description</label>
+            <textarea id="physical_description" rows="3" placeholder="Height, skin tone, distinguishing marks, tattoos"></textarea>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <button type="button" class="btn btn-outline" onclick="hsmsGoStep(1)">← Back</button>
+            <button type="button" class="btn btn-navy" onclick="hsmsGoStep(3)">Next →</button>
+          </div>
+        </section>
+
+        <!-- MODULE C: Aadhaar -->
+        <section class="form-section" data-section="3">
+          <h3>Module C — Aadhaar Verification</h3>
+          <div class="field">
+            <label>Is Aadhaar card available?</label>
+            <select id="aadhaar_status">
+              <option value="false">No — Aadhaar Not Available (will be flagged MISSING)</option>
+              <option value="true">Yes — Aadhaar Available</option>
+            </select>
+          </div>
+          <div id="aadhaarBlock" style="display:none;">
+            <div class="field">
+              <label for="aadhaar_number">Aadhaar Number (12 digits)</label>
+              <input type="text" id="aadhaar_number" maxlength="12" placeholder="XXXXXXXXXXXX" />
+            </div>
+            <p style="color:var(--text-muted); font-size:13px;">📷 Scan front + back of Aadhaar card in the Photos module (Module E).</p>
+          </div>
+          <div id="missingNotice" class="card" style="background:#fce4e4; border-left:4px solid var(--red); display:block;">
+            <strong>⚠ No Aadhaar:</strong> This profile will be automatically tagged as <strong>MISSING PERSON</strong> and queued for admin review.
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <button type="button" class="btn btn-outline" onclick="hsmsGoStep(2)">← Back</button>
+            <button type="button" class="btn btn-navy" onclick="hsmsGoStep(4)">Next →</button>
+          </div>
+        </section>
+
+        <!-- MODULE D: Relatives -->
+        <section class="form-section" data-section="4">
+          <h3>Module D — Relative / Family Details</h3>
+          <div class="field">
+            <label>Does the person have known relatives?</label>
+            <select id="has_relatives">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+          <div id="relativesBlock" style="display:none;">
+            <div id="relativeRows"></div>
+            <button type="button" class="btn btn-outline btn-sm" id="addRelativeBtn">+ Add Relative</button>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:16px;">
+            <button type="button" class="btn btn-outline" onclick="hsmsGoStep(3)">← Back</button>
+            <button type="button" class="btn btn-navy" onclick="hsmsGoStep(5)">Next →</button>
+          </div>
+        </section>
+
+        <!-- MODULE E: Photos -->
+        <section class="form-section" data-section="5">
+          <h3>Module E — Photo Capture (5–6 Photos Recommended)</h3>
+          <div class="photo-grid">
+            <div class="photo-slot" data-type="face_front"><div>P1 · Front Face</div><input type="file" accept="image/*" /></div>
+            <div class="photo-slot" data-type="face_left"><div>P2 · Left Profile</div><input type="file" accept="image/*" /></div>
+            <div class="photo-slot" data-type="face_right"><div>P3 · Right Profile</div><input type="file" accept="image/*" /></div>
+            <div class="photo-slot" data-type="full_body"><div>P4 · Full Body</div><input type="file" accept="image/*" /></div>
+            <div class="photo-slot" data-type="marks"><div>P5 · Distinguishing Marks</div><input type="file" accept="image/*" /></div>
+            <div class="photo-slot" data-type="aadhaar_front"><div>P6a · Aadhaar Front</div><input type="file" accept="image/*" /></div>
+            <div class="photo-slot" data-type="aadhaar_back"><div>P6b · Aadhaar Back</div><input type="file" accept="image/*" /></div>
+          </div>
+          <p style="color:var(--text-muted); font-size:13px; margin-top:12px;">Photos are uploaded to Supabase Storage under <code>/profiles/{uuid}/photos/</code> and linked to this record.</p>
+          <div style="display:flex; justify-content:space-between; margin-top:16px;">
+            <button type="button" class="btn btn-outline" onclick="hsmsGoStep(4)">← Back</button>
+            <button type="submit" class="btn btn-orange" id="submitBtn">✓ Submit Registration</button>
+          </div>
+        </section>
+
+      </form>
+
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/person.js"></script>
+</body>
+</html>

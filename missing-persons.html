@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — Missing Persons</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="hsms-app">
+  <aside class="hsms-sidebar" id="hsms-sidebar"></aside>
+  <div class="hsms-main">
+    <header class="hsms-topbar" id="hsms-topbar"></header>
+    <main class="hsms-content">
+
+      <h2>Missing Persons — Admin</h2>
+      <p style="color:var(--text-muted); margin-top:-8px;">Review auto-flagged profiles and publish/remove public notices.</p>
+
+      <div class="card">
+        <h3>Pending Review (auto-flagged, not yet published)</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tracking ID</th><th>Name</th><th>Found Area</th><th>Flagged</th><th></th></tr></thead>
+            <tbody id="pendingBody"><tr><td colspan="5">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Published Notices (live on public portal)</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tracking ID</th><th>Title</th><th>Posted</th><th></th></tr></thead>
+            <tbody id="activeBody"><tr><td colspan="4">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Public Sighting Tips</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tracking ID</th><th>Message</th><th>Contact</th><th>Location</th><th>Submitted</th></tr></thead>
+            <tbody id="tipsBody"><tr><td colspan="5">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script>
+let mpUser = null;
+
+(async function init() {
+  mpUser = hsmsRequireRole(["super_admin", "shelter_admin"]);
+  if (!mpUser) return;
+  hsmsRenderShell("missing-persons.html");
+  await Promise.all([loadPending(), loadActive(), loadTips()]);
+})();
+
+async function loadPending() {
+  const body = document.getElementById("pendingBody");
+  try {
+    const { data, error } = await sb
+      .from("missing_alerts")
+      .select("id, posted_at, person_id, persons(tracking_id, first_name, last_name, found_area)")
+      .eq("is_active", false)
+      .is("resolved_at", null)
+      .order("posted_at", { ascending: false });
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      body.innerHTML = `<tr><td colspan="5">No profiles pending review.</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = data
+      .map(
+        (a) => `<tr>
+          <td>${a.persons?.tracking_id || "—"}</td>
+          <td>${a.persons?.first_name || "Unknown"} ${a.persons?.last_name || ""}</td>
+          <td>${a.persons?.found_area || "—"}</td>
+          <td>${hsmsFormatDate(a.posted_at)}</td>
+          <td>
+            <button class="btn btn-orange btn-sm" onclick="publishAlert('${a.id}')">Publish</button>
+            <a class="btn btn-outline btn-sm" href="person-profile.html?id=${a.person_id}">View</a>
+          </td>
+        </tr>`
+      )
+      .join("");
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<tr><td colspan="5">Could not load.</td></tr>`;
+  }
+}
+
+async function loadActive() {
+  const body = document.getElementById("activeBody");
+  try {
+    const { data, error } = await sb
+      .from("missing_alerts")
+      .select("id, title, posted_at, person_id, persons(tracking_id)")
+      .eq("is_active", true)
+      .order("posted_at", { ascending: false });
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      body.innerHTML = `<tr><td colspan="4">No active public notices.</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = data
+      .map(
+        (a) => `<tr>
+          <td>${a.persons?.tracking_id || "—"}</td>
+          <td>${a.title || "Missing Person"}</td>
+          <td>${hsmsFormatDate(a.posted_at)}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="removeAlert('${a.id}', '${a.person_id}')">Remove (Found)</button></td>
+        </tr>`
+      )
+      .join("");
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<tr><td colspan="4">Could not load.</td></tr>`;
+  }
+}
+
+async function loadTips() {
+  const body = document.getElementById("tipsBody");
+  try {
+    const { data, error } = await sb
+      .from("public_tips")
+      .select("*, persons(tracking_id)")
+      .order("submitted_at", { ascending: false })
+      .limit(50);
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      body.innerHTML = `<tr><td colspan="5">No tips submitted yet.</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = data
+      .map(
+        (t) => `<tr>
+          <td>${t.persons?.tracking_id || "—"}</td>
+          <td>${t.message || "—"}</td>
+          <td>${t.contact || "—"}</td>
+          <td>${t.location || "—"}</td>
+          <td>${hsmsFormatDate(t.submitted_at)}</td>
+        </tr>`
+      )
+      .join("");
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<tr><td colspan="5">Could not load tips.</td></tr>`;
+  }
+}
+
+async function publishAlert(alertId) {
+  try {
+    const { error } = await sb.from("missing_alerts").update({ is_active: true, posted_at: new Date().toISOString() }).eq("id", alertId);
+    if (error) throw error;
+    hsmsToast("Published to public portal");
+    loadPending();
+    loadActive();
+  } catch (err) {
+    console.error(err);
+    hsmsToast("Could not publish", "error");
+  }
+}
+
+async function removeAlert(alertId, personId) {
+  if (!confirm("Remove this missing notice from the public portal?")) return;
+  try {
+    const { error } = await sb.from("missing_alerts").update({ is_active: false, resolved_at: new Date().toISOString() }).eq("id", alertId);
+    if (error) throw error;
+    await sb.from("persons").update({ is_missing: false }).eq("id", personId);
+    hsmsToast("Notice removed");
+    loadActive();
+  } catch (err) {
+    console.error(err);
+    hsmsToast("Could not remove notice", "error");
+  }
+}
+</script>
+</body>
+</html>

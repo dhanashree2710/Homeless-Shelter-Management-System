@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — Person List</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="hsms-app">
+  <aside class="hsms-sidebar" id="hsms-sidebar"></aside>
+  <div class="hsms-main">
+    <header class="hsms-topbar" id="hsms-topbar"></header>
+    <main class="hsms-content">
+
+      <div class="card-header">
+        <h2 style="margin:0;">Person List / Search</h2>
+        <a href="person-registration.html" class="btn btn-orange">+ New Registration</a>
+      </div>
+
+      <div class="card">
+        <div class="toolbar">
+          <input type="text" id="searchInput" placeholder="Search by name, tracking ID, or area..." style="flex:1; min-width:220px;" />
+          <select id="statusFilter">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="in_shelter">In Shelter</option>
+            <option value="missing">Missing</option>
+            <option value="reunited">Reunited</option>
+            <option value="deceased">Deceased</option>
+          </select>
+          <button class="btn btn-outline btn-sm" id="searchBtn">Search</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tracking ID</th><th>Name</th><th>Gender</th><th>Age</th>
+                <th>Area</th><th>Status</th><th>Aadhaar</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="listBody"><tr><td colspan="8">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/list.js"></script>
+</body>
+</html>

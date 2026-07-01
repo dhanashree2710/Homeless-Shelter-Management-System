@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — Public Missing Persons Portal</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="public-header">
+  <img src="images/logo.png" alt="HSMS" />
+  <div>
+    <div style="font-weight:700; font-size:18px;">Missing Person Portal</div>
+    <div style="font-size:12px; opacity:.8;">Help reunite individuals with their families — no login required</div>
+  </div>
+</header>
+
+<div class="public-wrap">
+
+  <div class="toolbar">
+    <input type="text" id="pubSearch" placeholder="Filter by city or area..." style="flex:1; min-width:220px;" />
+    <button class="btn btn-outline btn-sm" id="pubSearchBtn">Filter</button>
+  </div>
+
+  <div id="pubGrid" class="grid-3">Loading...</div>
+
+</div>
+
+<!-- Tip submission modal-ish section -->
+<div class="public-wrap" id="tipFormWrap" style="display:none;">
+  <div class="card">
+    <h3>Submit a Sighting Tip</h3>
+    <p style="color:var(--text-muted);">Reporting on: <strong id="tipPersonLabel"></strong></p>
+    <form id="tipForm">
+      <input type="hidden" id="tip_person_id" />
+      <div class="field"><label>What did you see? (location, time, description)</label><textarea id="tip_message" rows="3" required></textarea></div>
+      <div class="grid-2">
+        <div class="field"><label>Your Contact (phone/email, optional)</label><input type="text" id="tip_contact" /></div>
+        <div class="field"><label>Sighting Location</label><input type="text" id="tip_location" /></div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-orange">Submit Tip</button>
+        <button type="button" class="btn btn-outline" id="closeTipForm">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script>
+// Public page — no auth required. Relies on RLS allowing SELECT on
+// missing_alerts where is_active = true, and INSERT on public_tips.
+
+(async function init() {
+  await loadPublicListings();
+  document.getElementById("pubSearchBtn").addEventListener("click", loadPublicListings);
+  document.getElementById("pubSearch").addEventListener("keyup", (e) => { if (e.key === "Enter") loadPublicListings(); });
+  document.getElementById("tipForm").addEventListener("submit", submitTip);
+  document.getElementById("closeTipForm").addEventListener("click", () => {
+    document.getElementById("tipFormWrap").style.display = "none";
+  });
+})();
+
+async function loadPublicListings() {
+  const grid = document.getElementById("pubGrid");
+  grid.innerHTML = "Loading...";
+  const term = document.getElementById("pubSearch").value.trim();
+
+  try {
+    let query = sb
+      .from("missing_alerts")
+      .select("id, title, description, posted_at, person_id, persons(tracking_id, found_area, age_est, gender)")
+      .eq("is_active", true)
+      .order("posted_at", { ascending: false });
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    let rows = data || [];
+    if (term) {
+      rows = rows.filter((r) => (r.persons?.found_area || "").toLowerCase().includes(term.toLowerCase()));
+    }
+
+    if (rows.length === 0) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="big">✅</div>No active missing person notices right now.</div>`;
+      return;
+    }
+
+    // Fetch a representative photo per person (face_front preferred).
+    const personIds = rows.map((r) => r.person_id);
+    const { data: photos } = await sb.from("person_photos").select("person_id, photo_url, photo_type").in("person_id", personIds);
+    const photoMap = {};
+    (photos || []).forEach((p) => {
+      if (!photoMap[p.person_id] || p.photo_type === "face_front") photoMap[p.person_id] = p.photo_url;
+    });
+
+    grid.innerHTML = rows
+      .map(
+        (r) => `<div class="tip-card">
+          <img src="${photoMap[r.person_id] || 'images/logo.png'}" alt="Missing person" />
+          <div class="body">
+            <h4 style="margin:0 0 4px;">${r.title || "Missing Person"}</h4>
+            <p style="font-size:13px; color:var(--text-muted); margin:0 0 8px;">
+              ${r.persons?.found_area ? "Last seen near " + r.persons.found_area + ". " : ""}
+              ${r.persons?.age_est ? "Approx. age " + r.persons.age_est + ". " : ""}
+              ${r.persons?.gender ? r.persons.gender : ""}
+            </p>
+            <p style="font-size:13px;">${r.description || ""}</p>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+              <small style="color:var(--text-muted);">${hsmsFormatDate(r.posted_at)}</small>
+              <button class="btn btn-orange btn-sm" onclick='openTipForm("${r.person_id}", "${(r.title || "Missing Person").replace(/"/g, "")}")'>I have a tip</button>
+            </div>
+          </div>
+        </div>`
+      )
+      .join("");
+  } catch (err) {
+    console.error(err);
+    grid.innerHTML = `<p style="grid-column:1/-1;">Could not load listings.</p>`;
+  }
+}
+
+function openTipForm(personId, label) {
+  document.getElementById("tip_person_id").value = personId;
+  document.getElementById("tipPersonLabel").textContent = label;
+  document.getElementById("tipFormWrap").style.display = "block";
+  document.getElementById("tipFormWrap").scrollIntoView({ behavior: "smooth" });
+}
+
+async function submitTip(e) {
+  e.preventDefault();
+  try {
+    const { error } = await sb.from("public_tips").insert({
+      person_id: document.getElementById("tip_person_id").value,
+      message: document.getElementById("tip_message").value.trim(),
+      contact: document.getElementById("tip_contact").value.trim() || null,
+      location: document.getElementById("tip_location").value.trim() || null,
+    });
+    if (error) throw error;
+    hsmsToast("Thank you — your tip has been submitted.");
+    document.getElementById("tipForm").reset();
+    document.getElementById("tipFormWrap").style.display = "none";
+  } catch (err) {
+    console.error(err);
+    hsmsToast("Could not submit tip. Please try again.", "error");
+  }
+}
+</script>
+</body>
+</html>

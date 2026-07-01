@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — Person Profile</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="hsms-app">
+  <aside class="hsms-sidebar" id="hsms-sidebar"></aside>
+  <div class="hsms-main">
+    <header class="hsms-topbar" id="hsms-topbar"></header>
+    <main class="hsms-content" id="profileContent">
+      <p>Loading profile...</p>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script>
+let currentUser = null;
+let currentPerson = null;
+
+(async function init() {
+  currentUser = hsmsRequireAuth();
+  if (!currentUser) return;
+  hsmsRenderShell("person-list.html");
+  await loadProfile();
+})();
+
+function getPersonId() {
+  return new URLSearchParams(window.location.search).get("id");
+}
+
+async function loadProfile() {
+  const id = getPersonId();
+  const content = document.getElementById("profileContent");
+  if (!id) {
+    content.innerHTML = `<div class="empty-state"><div class="big">⚠</div>No person ID supplied.</div>`;
+    return;
+  }
+
+  try {
+    const [{ data: person, error: pErr }, { data: photos }, { data: relatives }, { data: logs }, { data: missing }] =
+      await Promise.all([
+        sb.from("persons").select("*, shelters(name, city)").eq("id", id).single(),
+        sb.from("person_photos").select("*").eq("person_id", id),
+        sb.from("person_relatives").select("*").eq("person_id", id),
+        sb.from("shelter_logs").select("*, shelters(name)").eq("person_id", id).order("created_at", { ascending: false }),
+        sb.from("missing_alerts").select("*").eq("person_id", id).order("posted_at", { ascending: false }),
+      ]);
+    if (pErr) throw pErr;
+    currentPerson = person;
+
+    const canEdit = ["super_admin", "shelter_admin"].includes(currentUser.role);
+
+    content.innerHTML = `
+      <div class="card-header">
+        <h2 style="margin:0;">${person.first_name || "Unknown"} ${person.last_name || ""} <small style="color:var(--text-muted); font-weight:400;">— ${person.tracking_id}</small></h2>
+        <div style="display:flex; gap:8px;">
+          ${hsmsBadge(person.profile_status)}
+          ${person.is_missing ? '<span class="badge badge-red">MISSING</span>' : ""}
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Profile Information</h3>
+          <div class="kv">
+            <div class="k">Alias</div><div class="v">${person.alias || "—"}</div>
+            <div class="k">Gender</div><div class="v">${person.gender || "—"}</div>
+            <div class="k">Approx. Age</div><div class="v">${person.age_est ?? "—"}</div>
+            <div class="k">Physical Desc.</div><div class="v">${person.physical_description || "—"}</div>
+            <div class="k">Aadhaar</div><div class="v">${person.aadhaar_status ? hsmsMaskAadhaar(person.aadhaar_number) + ' <span class="badge badge-green">Verified</span>' : '<span class="badge badge-red">Not Available</span>'}</div>
+            <div class="k">Found Address</div><div class="v">${person.found_address || "—"}</div>
+            <div class="k">Found Area</div><div class="v">${person.found_area || "—"}</div>
+            <div class="k">Found At</div><div class="v">${hsmsFormatDate(person.found_at)}</div>
+            <div class="k">GPS</div><div class="v">${person.found_lat ? `${person.found_lat}, ${person.found_lng}` : "—"}</div>
+            <div class="k">Shelter</div><div class="v">${person.shelters ? person.shelters.name + (person.shelters.city ? " — " + person.shelters.city : "") : "Not admitted"}</div>
+            <div class="k">Case Notes</div><div class="v">${person.case_notes || "—"}</div>
+            <div class="k">Registered</div><div class="v">${hsmsFormatDate(person.registered_at)}</div>
+          </div>
+          ${canEdit ? `
+          <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" onclick="toggleAadhaarEdit()">Update Aadhaar Status</button>
+            <button class="btn btn-outline btn-sm" onclick="cycleStatus()">Change Profile Status</button>
+            ${!person.aadhaar_status ? '<a href="missing-persons.html" class="btn btn-orange btn-sm">Manage Missing Post</a>' : ""}
+          </div>` : ""}
+        </div>
+
+        <div class="card">
+          <h3>Photos</h3>
+          ${photos && photos.length ? `<div class="profile-photo-strip">${photos.map((p) => `<img src="${p.photo_url}" title="${p.photo_type}" alt="${p.photo_type}" />`).join("")}</div>` : `<p style="color:var(--text-muted);">No photos uploaded.</p>`}
+
+          <h3 style="margin-top:20px;">Relatives</h3>
+          ${relatives && relatives.length ? relatives.map((r) => `
+            <div class="relative-row">
+              <div class="kv">
+                <div class="k">Name</div><div class="v">${r.relative_name || "—"}</div>
+                <div class="k">Relationship</div><div class="v">${r.relationship || "—"}</div>
+                <div class="k">Phone</div><div class="v">${r.phone || "—"}</div>
+                <div class="k">Status</div><div class="v">${hsmsBadge(r.contact_status)}</div>
+              </div>
+            </div>`).join("") : `<p style="color:var(--text-muted);">No relatives recorded.</p>`}
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Shelter Log History</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Shelter</th><th>Check-In</th><th>Check-Out</th><th>Bed</th><th>Remarks</th></tr></thead>
+            <tbody>
+              ${logs && logs.length ? logs.map((l) => `
+                <tr>
+                  <td>${l.shelters?.name || "—"}</td>
+                  <td>${hsmsFormatDate(l.check_in)}</td>
+                  <td>${l.check_out ? hsmsFormatDate(l.check_out) : "Currently in"}</td>
+                  <td>${l.bed_number || "—"}</td>
+                  <td>${l.remarks || "—"}</td>
+                </tr>`).join("") : `<tr><td colspan="5">No shelter history.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      ${missing && missing.length ? `
+      <div class="card">
+        <h3>Missing Alert History</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Title</th><th>Posted</th><th>Resolved</th><th>Status</th></tr></thead>
+            <tbody>
+              ${missing.map((m) => `
+                <tr>
+                  <td>${m.title || "—"}</td>
+                  <td>${hsmsFormatDate(m.posted_at)}</td>
+                  <td>${m.resolved_at ? hsmsFormatDate(m.resolved_at) : "—"}</td>
+                  <td>${m.is_active ? '<span class="badge badge-red">Active / Public</span>' : '<span class="badge badge-gray">Inactive</span>'}</td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ""}
+    `;
+  } catch (err) {
+    console.error(err);
+    content.innerHTML = `<div class="empty-state"><div class="big">⚠</div>Could not load this profile.</div>`;
+  }
+}
+
+async function toggleAadhaarEdit() {
+  const num = prompt("Enter Aadhaar number to mark this profile as VERIFIED (leave blank to cancel):");
+  if (!num) return;
+  try {
+    const { error } = await sb
+      .from("persons")
+      .update({ aadhaar_status: true, aadhaar_number: num, is_missing: false })
+      .eq("id", currentPerson.id);
+    if (error) throw error;
+    await sb.from("missing_alerts").update({ is_active: false, resolved_at: new Date().toISOString() }).eq("person_id", currentPerson.id).eq("is_active", true);
+    hsmsToast("Aadhaar status updated. Missing flag cleared.");
+    loadProfile();
+  } catch (err) {
+    console.error(err);
+    hsmsToast("Update failed", "error");
+  }
+}
+
+async function cycleStatus() {
+  const options = ["active", "in_shelter", "missing", "reunited", "deceased"];
+  const next = prompt(`Set profile_status to one of: ${options.join(", ")}`, currentPerson.profile_status);
+  if (!next || !options.includes(next)) return;
+  try {
+    const { error } = await sb.from("persons").update({ profile_status: next }).eq("id", currentPerson.id);
+    if (error) throw error;
+    hsmsToast("Status updated");
+    loadProfile();
+  } catch (err) {
+    console.error(err);
+    hsmsToast("Update failed", "error");
+  }
+}
+</script>
+</body>
+</html>

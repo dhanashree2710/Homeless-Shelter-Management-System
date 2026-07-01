@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — Dashboard</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="hsms-app">
+  <aside class="hsms-sidebar" id="hsms-sidebar"></aside>
+  <div class="hsms-main">
+    <header class="hsms-topbar" id="hsms-topbar"></header>
+    <main class="hsms-content">
+
+      <h2 id="welcomeMsg">Dashboard</h2>
+      <p style="color:var(--text-muted); margin-top:-8px;" id="welcomeSub">Overview of registrations, shelters and active alerts. <a href="javascript:void(0)" onclick="hsmsGoTo('person-registration.html')">Sign in to register a person →</a></p>
+
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-card navy"><div class="num" id="statTotal">—</div><div class="label">Total Registered Persons</div></div>
+        <div class="stat-card"><div class="num" id="statInShelter">—</div><div class="label">Currently In Shelter</div></div>
+        <div class="stat-card red"><div class="num" id="statMissing">—</div><div class="label">Missing / Unidentified</div></div>
+        <div class="stat-card orange"><div class="num" id="statShelters">—</div><div class="label">Active Shelters</div></div>
+        <div class="stat-card"><div class="num" id="statBeds">—</div><div class="label">Available Beds</div></div>
+        <div class="stat-card"><div class="num" id="statTips">—</div><div class="label">Public Tips Received</div></div>
+      </div>
+
+      <div class="grid-2" id="dashGrid">
+        <div class="card" id="recentCard">
+          <div class="card-header"><h3>Recent Registrations</h3><a href="javascript:void(0)" onclick="hsmsGoTo('person-list.html')">View all →</a></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tracking ID</th><th>Name</th><th>Status</th><th>Found At</th></tr></thead>
+              <tbody id="recentBody"><tr><td colspan="4">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Active Missing Alerts</h3><a href="javascript:void(0)" onclick="hsmsGoTo('missing-persons.html')">Manage →</a></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tracking ID</th><th>Title</th><th>Posted</th></tr></thead>
+              <tbody id="missingBody"><tr><td colspan="3">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>

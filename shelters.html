@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — Shelters</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="hsms-app">
+  <aside class="hsms-sidebar" id="hsms-sidebar"></aside>
+  <div class="hsms-main">
+    <header class="hsms-topbar" id="hsms-topbar"></header>
+    <main class="hsms-content">
+
+      <div class="card-header">
+        <h2 style="margin:0;">Shelters</h2>
+        <button class="btn btn-orange" id="newShelterBtn">+ Add Shelter</button>
+      </div>
+
+      <div class="card" id="shelterFormCard" style="display:none;">
+        <h3 id="shelterFormTitle">Add Shelter</h3>
+        <form id="shelterForm">
+          <input type="hidden" id="shelter_id" />
+          <div class="grid-2">
+            <div class="field"><label>Name</label><input type="text" id="s_name" required /></div>
+            <div class="field"><label>Contact Phone</label><input type="text" id="s_phone" /></div>
+          </div>
+          <div class="field"><label>Address</label><textarea id="s_address" rows="2" required></textarea></div>
+          <div class="grid-3">
+            <div class="field"><label>City</label><input type="text" id="s_city" /></div>
+            <div class="field"><label>State</label><input type="text" id="s_state" /></div>
+            <div class="field"><label>Capacity (total beds)</label><input type="number" id="s_capacity" min="0" required /></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Latitude</label><input type="text" id="s_lat" /></div>
+            <div class="field"><label>Longitude</label><input type="text" id="s_lng" /></div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button type="submit" class="btn btn-navy">Save Shelter</button>
+            <button type="button" class="btn btn-outline" id="cancelShelterBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>City</th><th>Capacity</th><th>Available</th><th>Phone</th><th></th></tr></thead>
+            <tbody id="shelterBody"><tr><td colspan="6">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/shelter.js"></script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — Reports</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="hsms-app">
+  <aside class="hsms-sidebar" id="hsms-sidebar"></aside>
+  <div class="hsms-main">
+    <header class="hsms-topbar" id="hsms-topbar"></header>
+    <main class="hsms-content">
+
+      <div class="card-header">
+        <h2 style="margin:0;">Reports & Analytics</h2>
+        <button class="btn btn-orange" id="exportBtn">⬇ Export Persons CSV</button>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card navy"><div class="num" id="rTotal">—</div><div class="label">Total Persons</div></div>
+        <div class="stat-card"><div class="num" id="rVerified">—</div><div class="label">Aadhaar Verified</div></div>
+        <div class="stat-card red"><div class="num" id="rMissing">—</div><div class="label">Missing</div></div>
+        <div class="stat-card"><div class="num" id="rReunited">—</div><div class="label">Reunited</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Persons by Status</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Status</th><th>Count</th></tr></thead>
+            <tbody id="statusBody"><tr><td colspan="2">Loading...</td></tr></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <h3>Persons by Shelter</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Shelter</th><th>Currently Housed</th><th>Capacity</th></tr></thead>
+            <tbody id="shelterStatsBody"><tr><td colspan="3">Loading...</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Registrations by Field Worker</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Staff</th><th>Role</th><th>Total Registered</th></tr></thead>
+          <tbody id="workerStatsBody"><tr><td colspan="3">Loading...</td></tr></tbody>
+        </table></div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script>
+(async function init() {
+  const user = hsmsRequireRole(["super_admin", "shelter_admin"]);
+  if (!user) return;
+  hsmsRenderShell("reports.html");
+
+  document.getElementById("exportBtn").addEventListener("click", exportCsv);
+
+  await loadHeadlineStats();
+  await loadStatusBreakdown();
+  await loadShelterStats();
+  await loadWorkerStats();
+})();
+
+async function loadHeadlineStats() {
+  try {
+    const [{ count: total }, { count: verified }, { count: missing }, { count: reunited }] = await Promise.all([
+      sb.from("persons").select("id", { count: "exact", head: true }),
+      sb.from("persons").select("id", { count: "exact", head: true }).eq("aadhaar_status", true),
+      sb.from("persons").select("id", { count: "exact", head: true }).eq("is_missing", true),
+      sb.from("persons").select("id", { count: "exact", head: true }).eq("profile_status", "reunited"),
+    ]);
+    document.getElementById("rTotal").textContent = total ?? 0;
+    document.getElementById("rVerified").textContent = verified ?? 0;
+    document.getElementById("rMissing").textContent = missing ?? 0;
+    document.getElementById("rReunited").textContent = reunited ?? 0;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadStatusBreakdown() {
+  const body = document.getElementById("statusBody");
+  try {
+    const { data, error } = await sb.from("persons").select("profile_status");
+    if (error) throw error;
+    const counts = {};
+    (data || []).forEach((p) => { counts[p.profile_status] = (counts[p.profile_status] || 0) + 1; });
+    const entries = Object.entries(counts);
+    body.innerHTML = entries.length
+      ? entries.map(([status, count]) => `<tr><td>${hsmsBadge(status)}</td><td>${count}</td></tr>`).join("")
+      : `<tr><td colspan="2">No data.</td></tr>`;
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<tr><td colspan="2">Could not load.</td></tr>`;
+  }
+}
+
+async function loadShelterStats() {
+  const body = document.getElementById("shelterStatsBody");
+  try {
+    const { data: shelters, error } = await sb.from("shelters").select("id, name, capacity, available_beds");
+    if (error) throw error;
+    body.innerHTML = (shelters || [])
+      .map((s) => `<tr><td>${s.name}</td><td>${s.capacity - (s.available_beds ?? s.capacity)}</td><td>${s.capacity}</td></tr>`)
+      .join("") || `<tr><td colspan="3">No shelters.</td></tr>`;
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<tr><td colspan="3">Could not load.</td></tr>`;
+  }
+}
+
+async function loadWorkerStats() {
+  const body = document.getElementById("workerStatsBody");
+  try {
+    const { data: persons, error } = await sb.from("persons").select("registered_by");
+    if (error) throw error;
+    const { data: users } = await sb.from("users").select("id, full_name, role");
+
+    const counts = {};
+    (persons || []).forEach((p) => { if (p.registered_by) counts[p.registered_by] = (counts[p.registered_by] || 0) + 1; });
+
+    const rows = Object.entries(counts).map(([uid, count]) => {
+      const u = (users || []).find((x) => x.id === uid);
+      return `<tr><td>${u?.full_name || "Unknown"}</td><td>${u ? hsmsRoleLabel(u.role) : "—"}</td><td>${count}</td></tr>`;
+    });
+
+    body.innerHTML = rows.length ? rows.join("") : `<tr><td colspan="3">No data.</td></tr>`;
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<tr><td colspan="3">Could not load.</td></tr>`;
+  }
+}
+
+async function exportCsv() {
+  try {
+    const { data, error } = await sb.from("persons").select("*");
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      hsmsToast("No data to export", "error");
+      return;
+    }
+    const headers = Object.keys(data[0]);
+    const csvRows = [
+      headers.join(","),
+      ...data.map((row) => headers.map((h) => `"${String(row[h] ?? "").replace(/"/g, '""')}"`).join(",")),
+    ];
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `hsms-persons-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error(err);
+    hsmsToast("Export failed", "error");
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HSMS — Login</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="hsms-auth-wrap">
+  <div class="hsms-auth-card">
+    <img src="images/logo.png" alt="HSMS logo" />
+    <h1>Homeless Shelter Management System</h1>
+    <p class="sub">Sign in to your staff account</p>
+
+    <form id="loginForm">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" required placeholder="you@hsms.org" />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" required placeholder="••••••••" />
+      </div>
+      <button type="submit" class="btn btn-primary" id="loginBtn">Sign In</button>
+      <div class="error-text" id="loginError"></div>
+    </form>
+
+    <p class="demo-note">
+      Field worker, shelter admin and super admin accounts are managed in the
+      <strong>users</strong> table. No login needed for the public missing-person
+      portal — see <a href="public-tips.html">public-tips.html</a>.
+    </p>
+    <p class="demo-note"><a href="index.html">← Back to public dashboard</a></p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script>
+  // If already logged in, skip straight to the intended page (or dashboard).
+  const nextPage = new URLSearchParams(window.location.search).get("next") || "index.html";
+  if (hsmsGetSession()) window.location.href = nextPage;
+
+  const form = document.getElementById("loginForm");
+  const btn = document.getElementById("loginBtn");
+  const errEl = document.getElementById("loginError");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errEl.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Signing in...";
+
+    const email = document.getElementById("email").value.trim().toLowerCase();
+    const password = document.getElementById("password").value;
+
+    try {
+      const { data, error } = await sb
+        .from("users")
+        .select("*")
+        .eq("email", email)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data || data.password !== password) {
+        errEl.textContent = "Invalid email or password.";
+        btn.disabled = false;
+        btn.textContent = "Sign In";
+        return;
+      }
+
+      hsmsSaveSession(data);
+      window.location.href = nextPage;
+    } catch (err) {
+      console.error(err);
+      errEl.textContent = "Could not sign in. Please try again.";
+      btn.disabled = false;
+      btn.textContent = "Sign In";
+    }
+  });
+</script>
+</body>
+</html>
