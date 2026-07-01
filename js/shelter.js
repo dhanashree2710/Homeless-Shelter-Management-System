@@ -268,32 +268,75 @@ async function doCheckOut() {
 
 async function loadRoster() {
   const body = document.getElementById("rosterBody");
+
   try {
     const { data, error } = await sb
       .from("shelter_logs")
-      .select("*, persons(tracking_id, first_name, last_name), shelters(name)")
-      .is("check_out", null)
+      .select(`
+        id,
+        check_in,
+        check_out,
+        bed_number,
+        remarks,
+        persons (
+          tracking_id,
+          first_name,
+          last_name
+        ),
+        shelters (
+          name
+        )
+      `)
       .order("check_in", { ascending: false });
+
     if (error) throw error;
 
     if (!data || data.length === 0) {
-      body.innerHTML = `<tr><td colspan="5">No one is currently checked in.</td></tr>`;
+      body.innerHTML = `
+        <tr>
+          <td colspan="7">No shelter logs found.</td>
+        </tr>`;
       return;
     }
 
-    body.innerHTML = data
-      .map(
-        (l) => `<tr>
-          <td>${l.persons?.tracking_id || "—"}</td>
-          <td>${l.persons?.first_name || "Unknown"} ${l.persons?.last_name || ""}</td>
-          <td>${l.shelters?.name || "—"}</td>
-          <td>${l.bed_number || "—"}</td>
-          <td>${hsmsFormatDate(l.check_in)}</td>
-        </tr>`
-      )
-      .join("");
+    body.innerHTML = "";
+
+    data.forEach((log) => {
+
+      const status = log.check_out
+        ? '<span class="badge badge-gray">Checked Out</span>'
+        : '<span class="badge badge-green">Checked In</span>';
+
+      body.innerHTML += `
+        <tr>
+          <td>${log.persons?.tracking_id ?? "-"}</td>
+
+          <td>
+            ${(log.persons?.first_name ?? "Unknown")}
+            ${(log.persons?.last_name ?? "")}
+          </td>
+
+          <td>${log.shelters?.name ?? "-"}</td>
+
+          <td>${log.bed_number ?? "-"}</td>
+
+          <td>${hsmsFormatDate(log.check_in)}</td>
+
+          <td>${log.check_out ? hsmsFormatDate(log.check_out) : "-"}</td>
+
+          <td>${status}</td>
+        </tr>
+      `;
+    });
+
   } catch (err) {
     console.error(err);
-    body.innerHTML = `<tr><td colspan="5">Could not load roster.</td></tr>`;
+
+    body.innerHTML = `
+      <tr>
+        <td colspan="7">
+          Could not load shelter roster.
+        </td>
+      </tr>`;
   }
 }
