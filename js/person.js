@@ -196,25 +196,55 @@ async function submitRegistration(e) {
     }
 
     // Photos
-    const photoInputs = document.querySelectorAll(".photo-slot input[type=file]");
-    for (const input of photoInputs) {
-      const file = input.files[0];
-      if (!file) continue;
-      const photoType = input.closest(".photo-slot").dataset.type;
-      const path = `profiles/${person.id}/photos/${photoType}-${Date.now()}.${file.name.split(".").pop()}`;
-      const { error: upErr } = await sb.storage.from("person-photos").upload(path, file, { upsert: true });
-      if (upErr) {
-        console.error(upErr);
-        continue;
-      }
-      const { data: urlData } = sb.storage.from("person-photos").getPublicUrl(path);
-      await sb.from("person_photos").insert({
-        person_id: person.id,
-        photo_url: urlData.publicUrl,
-        photo_type: photoType,
-        uploaded_by: hsmsCurrentUser.id,
-      });
-    }
+   // Upload Photos
+const photoInputs = document.querySelectorAll(".photo-slot input[type=file]");
+
+for (const input of photoInputs) {
+  const file = input.files[0];
+  if (!file) continue;
+
+  const photoType = input.closest(".photo-slot").dataset.type;
+
+  // File extension
+  const fileExt = file.name.split(".").pop();
+
+  // Unique file name
+  const fileName = `${photoType}_${Date.now()}.${fileExt}`;
+
+  // Storage path inside Person bucket
+  const filePath = `${person.id}/${fileName}`;
+
+  // Upload to Person bucket
+  const { error: uploadError } = await sb.storage
+    .from("Person")
+    .upload(filePath, file, {
+      upsert: true,
+    });
+
+  if (uploadError) {
+    console.error("Upload Error:", uploadError);
+    continue;
+  }
+
+  // Get Public URL
+  const { data } = sb.storage
+    .from("Person")
+    .getPublicUrl(filePath);
+
+  // Save URL in person_photos table
+  const { error: photoError } = await sb
+    .from("person_photos")
+    .insert({
+      person_id: person.id,
+      photo_url: data.publicUrl,
+      photo_type: photoType,
+      uploaded_by: hsmsCurrentUser.id,
+    });
+
+  if (photoError) {
+    console.error("Photo Table Error:", photoError);
+  }
+}
 
     // If no Aadhaar, auto-create a missing alert in review queue.
     if (!aadhaarStatus) {
