@@ -75,6 +75,7 @@ h1, h2, h3, h4 { color: var(--navy); margin-top: 0; }
   outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(20,150,127,0.15);
 }
 .field small.hint { color: var(--text-muted); font-size: 12px; }
+.required-mark { color: var(--red); font-weight: 700; }
 
 .btn {
   display: inline-block;

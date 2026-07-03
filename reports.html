@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>HSMS — Reports</title>
+<title>HSMS - Reports</title>
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -15,14 +15,29 @@
 
       <div class="card-header">
         <h2 style="margin:0;">Reports & Analytics</h2>
-        <button class="btn btn-orange" id="exportBtn">⬇ Export Persons CSV</button>
+        <button class="btn btn-orange" id="exportBtn">Export Persons CSV</button>
+      </div>
+
+      <div class="card">
+        <h3>Report Filters</h3>
+        <div class="grid-3">
+          <div class="field"><label>Date-wise</label><input type="date" id="reportDate" /></div>
+          <div class="field"><label>Month-wise</label><input type="month" id="reportMonth" /></div>
+          <div class="field"><label>User-wise</label><select id="reportUser"><option value="">All Users</option></select></div>
+          <div class="field"><label>Shelter-wise</label><select id="reportShelter"><option value="">All Shelters</option></select></div>
+          <div class="field"><label>Aadhaar Number-wise</label><input type="text" id="reportAadhaar" maxlength="12" placeholder="Search Aadhaar number" /></div>
+          <div class="field" style="align-self:end; display:flex; gap:8px;">
+            <button class="btn btn-navy" id="applyFiltersBtn">Apply</button>
+            <button class="btn btn-outline" id="clearFiltersBtn">Clear</button>
+          </div>
+        </div>
       </div>
 
       <div class="stat-grid">
-        <div class="stat-card navy"><div class="num" id="rTotal">—</div><div class="label">Total Persons</div></div>
-        <div class="stat-card"><div class="num" id="rVerified">—</div><div class="label">Aadhaar Verified</div></div>
-        <div class="stat-card red"><div class="num" id="rMissing">—</div><div class="label">Missing</div></div>
-        <div class="stat-card"><div class="num" id="rReunited">—</div><div class="label">Reunited</div></div>
+        <div class="stat-card navy"><div class="num" id="rTotal">-</div><div class="label">Total Persons</div></div>
+        <div class="stat-card"><div class="num" id="rVerified">-</div><div class="label">Aadhaar Verified</div></div>
+        <div class="stat-card red"><div class="num" id="rMissing">-</div><div class="label">Missing</div></div>
+        <div class="stat-card"><div class="num" id="rReunited">-</div><div class="label">Reunited</div></div>
       </div>
 
       <div class="grid-2">
@@ -57,113 +72,210 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/config.js"></script>
 <script>
+let reportRows = [];
+let reportUsers = [];
+let reportShelters = [];
+
 (async function init() {
   const user = hsmsRequireRole(["super_admin", "shelter_admin"]);
   if (!user) return;
   hsmsRenderShell("reports.html");
 
   document.getElementById("exportBtn").addEventListener("click", exportCsv);
+  document.getElementById("applyFiltersBtn").addEventListener("click", refreshReports);
+  document.getElementById("clearFiltersBtn").addEventListener("click", clearReportFilters);
+  document.getElementById("reportAadhaar").addEventListener("keyup", (e) => {
+    if (e.key === "Enter") refreshReports();
+  });
 
-  await loadHeadlineStats();
-  await loadStatusBreakdown();
-  await loadShelterStats();
-  await loadWorkerStats();
+  await loadReportFilterOptions();
+  await refreshReports();
 })();
 
-async function loadHeadlineStats() {
+function addDays(dateString, days) {
+  const d = new Date(`${dateString}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function nextMonth(monthString) {
+  const [year, month] = monthString.split("-").map(Number);
+  const d = new Date(year, month, 1);
+  return d.toISOString().slice(0, 7);
+}
+
+function userName(userId) {
+  const user = reportUsers.find((u) => u.id === userId);
+  return user?.full_name || "Unknown";
+}
+
+function shelterName(shelterId) {
+  const shelter = reportShelters.find((s) => s.id === shelterId);
+  return shelter?.name || "";
+}
+
+async function loadReportFilterOptions() {
   try {
-    const [{ count: total }, { count: verified }, { count: missing }, { count: reunited }] = await Promise.all([
-      sb.from("persons").select("id", { count: "exact", head: true }),
-      sb.from("persons").select("id", { count: "exact", head: true }).eq("aadhaar_status", true),
-      sb.from("persons").select("id", { count: "exact", head: true }).eq("is_missing", true),
-      sb.from("persons").select("id", { count: "exact", head: true }).eq("profile_status", "reunited"),
+    const [{ data: users }, { data: shelters }] = await Promise.all([
+      sb.from("users").select("id, full_name, role").order("full_name"),
+      sb.from("shelters").select("id, name, capacity, available_beds").order("name"),
     ]);
-    document.getElementById("rTotal").textContent = total ?? 0;
-    document.getElementById("rVerified").textContent = verified ?? 0;
-    document.getElementById("rMissing").textContent = missing ?? 0;
-    document.getElementById("rReunited").textContent = reunited ?? 0;
+    reportUsers = users || [];
+    reportShelters = shelters || [];
+
+    document.getElementById("reportUser").innerHTML =
+      `<option value="">All Users</option>` +
+      reportUsers.map((u) => `<option value="${u.id}">${u.full_name} (${hsmsRoleLabel(u.role)})</option>`).join("");
+
+    document.getElementById("reportShelter").innerHTML =
+      `<option value="">All Shelters</option>` +
+      reportShelters.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
   } catch (err) {
     console.error(err);
   }
 }
 
-async function loadStatusBreakdown() {
+function buildPersonsReportQuery() {
+  let query = sb
+    .from("persons")
+    .select("id, tracking_id, first_name, last_name, gender, age_est, found_area, found_address, aadhaar_status, aadhaar_number, profile_status, is_missing, shelter_id, registered_by, registered_at, case_notes, physical_description")
+    .order("registered_at", { ascending: false });
+
+  const reportDate = document.getElementById("reportDate").value;
+  const reportMonth = document.getElementById("reportMonth").value;
+  const reportUser = document.getElementById("reportUser").value;
+  const reportShelter = document.getElementById("reportShelter").value;
+  const aadhaar = document.getElementById("reportAadhaar").value.trim();
+
+  if (reportDate) {
+    query = query.gte("registered_at", `${reportDate}T00:00:00`).lt("registered_at", `${addDays(reportDate, 1)}T00:00:00`);
+  } else if (reportMonth) {
+    query = query.gte("registered_at", `${reportMonth}-01T00:00:00`).lt("registered_at", `${nextMonth(reportMonth)}-01T00:00:00`);
+  }
+
+  if (reportUser) query = query.eq("registered_by", reportUser);
+  if (reportShelter) query = query.eq("shelter_id", reportShelter);
+  if (aadhaar) query = query.ilike("aadhaar_number", `%${aadhaar}%`);
+
+  return query;
+}
+
+async function refreshReports() {
+  try {
+    const { data, error } = await buildPersonsReportQuery();
+    if (error) throw error;
+    reportRows = data || [];
+    renderHeadlineStats();
+    renderStatusBreakdown();
+    renderShelterStats();
+    renderWorkerStats();
+  } catch (err) {
+    console.error(err);
+    hsmsToast("Could not load filtered report data", "error");
+  }
+}
+
+function renderHeadlineStats() {
+  document.getElementById("rTotal").textContent = reportRows.length;
+  document.getElementById("rVerified").textContent = reportRows.filter((p) => p.aadhaar_status).length;
+  document.getElementById("rMissing").textContent = reportRows.filter((p) => p.is_missing).length;
+  document.getElementById("rReunited").textContent = reportRows.filter((p) => p.profile_status === "reunited").length;
+}
+
+function renderStatusBreakdown() {
   const body = document.getElementById("statusBody");
-  try {
-    const { data, error } = await sb.from("persons").select("profile_status");
-    if (error) throw error;
-    const counts = {};
-    (data || []).forEach((p) => { counts[p.profile_status] = (counts[p.profile_status] || 0) + 1; });
-    const entries = Object.entries(counts);
-    body.innerHTML = entries.length
-      ? entries.map(([status, count]) => `<tr><td>${hsmsBadge(status)}</td><td>${count}</td></tr>`).join("")
-      : `<tr><td colspan="2">No data.</td></tr>`;
-  } catch (err) {
-    console.error(err);
-    body.innerHTML = `<tr><td colspan="2">Could not load.</td></tr>`;
-  }
+  const counts = {};
+  reportRows.forEach((p) => { counts[p.profile_status || "unknown"] = (counts[p.profile_status || "unknown"] || 0) + 1; });
+  const entries = Object.entries(counts);
+  body.innerHTML = entries.length
+    ? entries.map(([status, count]) => `<tr><td>${hsmsBadge(status)}</td><td>${count}</td></tr>`).join("")
+    : `<tr><td colspan="2">No data.</td></tr>`;
 }
 
-async function loadShelterStats() {
+function renderShelterStats() {
   const body = document.getElementById("shelterStatsBody");
-  try {
-    const { data: shelters, error } = await sb.from("shelters").select("id, name, capacity, available_beds");
-    if (error) throw error;
-    body.innerHTML = (shelters || [])
-      .map((s) => `<tr><td>${s.name}</td><td>${s.capacity - (s.available_beds ?? s.capacity)}</td><td>${s.capacity}</td></tr>`)
-      .join("") || `<tr><td colspan="3">No shelters.</td></tr>`;
-  } catch (err) {
-    console.error(err);
-    body.innerHTML = `<tr><td colspan="3">Could not load.</td></tr>`;
-  }
+  const shelterFilter = document.getElementById("reportShelter").value;
+  const shelters = shelterFilter ? reportShelters.filter((s) => s.id === shelterFilter) : reportShelters;
+  const rows = shelters.map((s) => {
+    const housed = reportRows.filter((p) => p.shelter_id === s.id && p.profile_status === "in_shelter").length;
+    return `<tr><td>${s.name}</td><td>${housed}</td><td>${s.capacity ?? "-"}</td></tr>`;
+  });
+  body.innerHTML = rows.length ? rows.join("") : `<tr><td colspan="3">No shelters.</td></tr>`;
 }
 
-async function loadWorkerStats() {
+function renderWorkerStats() {
   const body = document.getElementById("workerStatsBody");
-  try {
-    const { data: persons, error } = await sb.from("persons").select("registered_by");
-    if (error) throw error;
-    const { data: users } = await sb.from("users").select("id, full_name, role");
-
-    const counts = {};
-    (persons || []).forEach((p) => { if (p.registered_by) counts[p.registered_by] = (counts[p.registered_by] || 0) + 1; });
-
-    const rows = Object.entries(counts).map(([uid, count]) => {
-      const u = (users || []).find((x) => x.id === uid);
-      return `<tr><td>${u?.full_name || "Unknown"}</td><td>${u ? hsmsRoleLabel(u.role) : "—"}</td><td>${count}</td></tr>`;
-    });
-
-    body.innerHTML = rows.length ? rows.join("") : `<tr><td colspan="3">No data.</td></tr>`;
-  } catch (err) {
-    console.error(err);
-    body.innerHTML = `<tr><td colspan="3">Could not load.</td></tr>`;
-  }
+  const counts = {};
+  reportRows.forEach((p) => { if (p.registered_by) counts[p.registered_by] = (counts[p.registered_by] || 0) + 1; });
+  const rows = Object.entries(counts).map(([uid, count]) => {
+    const u = reportUsers.find((x) => x.id === uid);
+    return `<tr><td>${u?.full_name || "Unknown"}</td><td>${u ? hsmsRoleLabel(u.role) : "-"}</td><td>${count}</td></tr>`;
+  });
+  body.innerHTML = rows.length ? rows.join("") : `<tr><td colspan="3">No data.</td></tr>`;
 }
 
-async function exportCsv() {
-  try {
-    const { data, error } = await sb.from("persons").select("*");
-    if (error) throw error;
-    if (!data || data.length === 0) {
-      hsmsToast("No data to export", "error");
-      return;
-    }
-    const headers = Object.keys(data[0]);
-    const csvRows = [
-      headers.join(","),
-      ...data.map((row) => headers.map((h) => `"${String(row[h] ?? "").replace(/"/g, '""')}"`).join(",")),
-    ];
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `hsms-persons-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error(err);
-    hsmsToast("Export failed", "error");
+function clearReportFilters() {
+  ["reportDate", "reportMonth", "reportUser", "reportShelter", "reportAadhaar"].forEach((id) => {
+    document.getElementById(id).value = "";
+  });
+  refreshReports();
+}
+
+function csvEscape(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function exportCsv() {
+  if (!reportRows.length) {
+    hsmsToast("No data to export", "error");
+    return;
   }
+
+  const headers = [
+    "Tracking ID",
+    "Name",
+    "Gender",
+    "Age",
+    "Area",
+    "Aadhaar Number",
+    "Aadhaar Verified",
+    "Status",
+    "Registered By",
+    "Registered By Role",
+    "Shelter",
+    "Registration Date",
+    "Initial Note",
+    "Physical Description",
+  ];
+
+  const rows = reportRows.map((p) => {
+    const user = reportUsers.find((u) => u.id === p.registered_by);
+    return [
+      p.tracking_id,
+      `${p.first_name || "Unknown"} ${p.last_name || ""}`.trim(),
+      p.gender,
+      p.age_est,
+      p.found_area,
+      p.aadhaar_number,
+      p.aadhaar_status ? "Yes" : "No",
+      p.profile_status,
+      userName(p.registered_by),
+      user ? hsmsRoleLabel(user.role) : "",
+      shelterName(p.shelter_id),
+      hsmsFormatDate(p.registered_at),
+      p.case_notes,
+      p.physical_description,
+    ];
+  });
+
+  const csvRows = [headers.map(csvEscape).join(","), ...rows.map((row) => row.map(csvEscape).join(","))];
+  const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `hsms-persons-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 </script>
 </body>

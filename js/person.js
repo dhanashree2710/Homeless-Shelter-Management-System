@@ -49,6 +49,10 @@ function bindStaticEvents() {
 }
 
 function hsmsGoStep(step) {
+  const active = document.querySelector(".form-section.active");
+  const currentStep = active ? Number(active.dataset.section) : 1;
+  if (step > currentStep && !validateRegistrationStep(currentStep)) return;
+
   document.querySelectorAll(".form-section").forEach((s) => s.classList.remove("active"));
   document.querySelector(`.form-section[data-section="${step}"]`).classList.add("active");
 
@@ -60,6 +64,69 @@ function hsmsGoStep(step) {
   });
 
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function getTrimmedValue(id) {
+  return document.getElementById(id).value.trim();
+}
+
+function focusField(id) {
+  const el = document.getElementById(id);
+  if (el) el.focus();
+}
+
+function hasPhoto(photoType) {
+  const input = document.querySelector(`.photo-slot[data-type="${photoType}"] input[type=file]`);
+  return Boolean(input?.files?.length);
+}
+
+function requireField(id, message, step) {
+  if (!getTrimmedValue(id)) {
+    hsmsToast(message, "error");
+    if (step) hsmsGoStep(step);
+    setTimeout(() => focusField(id), 100);
+    return false;
+  }
+  return true;
+}
+
+function validateRegistrationStep(step) {
+  if (step === 1) {
+    if (!requireField("found_area", "Area is required")) return false;
+    if (!requireField("found_address", "Found address is required")) return false;
+    if (!requireField("city_code", "City code is required")) return false;
+    if (!requireField("case_notes", "Initial note is required")) return false;
+  }
+
+  if (step === 2) {
+    if (!requireField("age_est", "Age is required")) return false;
+    if (!requireField("gender", "Gender is required")) return false;
+    if (!requireField("physical_description", "Physical description is required")) return false;
+  }
+
+  if (step === 5) {
+    if (!hasPhoto("face_front")) {
+      hsmsToast("Profile photo is required", "error");
+      return false;
+    }
+    if (!hasPhoto("marks")) {
+      hsmsToast("Distinguishing marks photo is required", "error");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function validateRegistrationForm() {
+  for (const step of [1, 2, 5]) {
+    if (!validateRegistrationStep(step)) {
+      if (step !== 5) hsmsGoStep(step);
+      else hsmsGoStep(5);
+      return false;
+    }
+  }
+  return true;
 }
 
 async function captureGps() {
@@ -135,18 +202,14 @@ function addRelativeRow() {
 
 async function submitRegistration(e) {
   e.preventDefault();
+  if (!validateRegistrationForm()) return;
+
   const btn = document.getElementById("submitBtn");
   btn.disabled = true;
   btn.textContent = "Submitting...";
 
   try {
     const foundAddress = document.getElementById("found_address").value.trim();
-    if (!foundAddress) {
-      hsmsToast("Found address is required", "error");
-      hsmsGoStep(1);
-      return;
-    }
-
     const cityCode = document.getElementById("city_code").value.trim() || "GEN";
     const trackingId = await hsmsGenerateTrackingId(cityCode);
     const aadhaarStatus = document.getElementById("aadhaar_status").value === "true";

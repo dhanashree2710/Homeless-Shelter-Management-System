@@ -31,16 +31,23 @@
           </select>
           <button class="btn btn-outline btn-sm" id="searchBtn">Search</button>
         </div>
+        <div class="toolbar" id="adminRecordFilters" style="display:none;">
+          <select id="registeredByFilter"><option value="">All Registered By</option></select>
+          <select id="shelterFilter"><option value="">All Shelters</option></select>
+          <input type="date" id="registrationDateFilter" title="Registration Date" />
+          <input type="text" id="aadhaarFilter" maxlength="12" placeholder="Aadhaar number" />
+          <button class="btn btn-outline btn-sm" id="clearAdminFiltersBtn">Clear Filters</button>
+        </div>
 
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Tracking ID</th><th>Name</th><th>Gender</th><th>Age</th>
-                <th>Area</th><th>Status</th><th>Aadhaar</th><th></th>
+                <th>Area</th><th>Status</th><th>Aadhaar</th><th>Registered By</th><th>Shelter</th><th>Registration Date</th><th></th>
               </tr>
             </thead>
-            <tbody id="listBody"><tr><td colspan="8">Loading...</td></tr></tbody>
+            <tbody id="listBody"><tr><td colspan="11">Loading...</td></tr></tbody>
           </table>
         </div>
       </div>
